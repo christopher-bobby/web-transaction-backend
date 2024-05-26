@@ -1,16 +1,11 @@
 const jwt = require('jsonwebtoken');
 function verifyToken(req, res, next) {
-    const token = req.header('Authorization');
-    console.log("header token", token, req)
+    const token = req.header('Authorization').split(' ')[1];;
     if (!token) return res.status(401).json({ error: 'Access denied' });
     try {
-        const decoded = jwt.verify(token, 'bnc-web-token', function(err, decoded) {
-            if(err) {
-                console.log("error decoded", decoded, err)
-            }
-          }
+        const decoded = jwt.verify(token, 'bnc-web-token'
         );
-        // req.userId = decoded.userId;
+        req.userId = decoded.userId;
         next();
     } catch (error) {
         res.status(401).json({ error: 'Invalid token' });

@@ -3,6 +3,10 @@ const db = require('mysql-promise')();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const verifyToken = require('../middleware/index.js');
+const mysql = require('mysql');
+const multer = require('multer');
+const csv = require('csv-parser');
+const fs = require('fs');
 
 db.configure({
 	"host": "localhost",
@@ -16,10 +20,21 @@ const express = require('express');
 
 const router = express.Router();
 
-// const Model = require('../models/model');
-// const MenuModel = require('../models/menuModel');
-// const RecipeModel = require('../models/recipeModel');
 
+const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+}
+
+const validatePhoneNumber = (phoneNumber) => {
+    const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+    return phoneRegex.test(phoneNumber);
+}
+
+const validatePassword = (password) => {
+    const passwordRegex = /^(?=.*[\W_]).{8,20}$/;
+    return passwordRegex.test(password);
+}
 
 
 router.post('/register', async (req, res) => {
@@ -34,15 +49,39 @@ router.post('/register', async (req, res) => {
         Verification: req.body.verification,
         Password: req.body.password
     }
-
-    for (const [key, value] of Object.entries(data)) { // all required
+    
+    // all fields are required
+    for (const [key, value] of Object.entries(data)) {
         if (value === undefined || value === null) {
             return res.status(400).json({ error: `${key} is required` });
         }
     }
 
-    const hashedPassword = await bcrypt.hash(data.Password, 10);
+    // email, phone number, password validation
+    if(!validateEmail(data.Email)) {
+        res.status(400).json("Please use proper email address")
+    }
+    if(!validatePhoneNumber(data.PhoneNumber)) {
+        res.status(400).json("Please use valid phone number")
+    }
+    if(!validatePassword(data.Password)) {
+        res.status(400).json("Password must contain at least one unique character, minimum 8 characters, and maximum 20 characters")
+    }
+    
+    //Corporate Bank Account Number is unique validation
+    const existingBankAccount = await db.query('SELECT * FROM USER WHERE CorporateAccount = ?', [data.CorporateAccount]);
+    if(existingBankAccount?.length) {
+        res.status(400).json("Bank account number is already registered")
+    }
 
+
+    //User ID is unique validation
+    const existingUser = await db.query('SELECT * FROM USER WHERE UserId = ?', [data.UserId]);
+    if(existingUser?.length) {
+        res.status(400).json("user already exist")
+    }
+
+    const hashedPassword = await bcrypt.hash(data.Password, 10);
 
     try {
         db.query(`INSERT INTO User (CorporateAccount, CorporateName, UserId, UserName, UserRole, PhoneNumber,Email, Verification, Password ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [data.CorporateAccount, data.CorporateName, data.UserId, data.UserName, data.UserRole, data.PhoneNumber, data.Email, data.Verification, hashedPassword]).spread(function (users) {
@@ -80,8 +119,7 @@ router.post('/login', async (req, res) => {
             res.status(403).json("Username / Corporate Account / Password doesn't match");
            }
 
-           const token = jwt.sign({ userId: item.UserId }, 'bnc-web-token', {expiresIn: '1h', });
-    
+           const token = jwt.sign({ userId: item.UserId }, 'bnc-web-token', {expiresIn: '1h', })
     
            res.status(200).json({
             data: {
@@ -108,21 +146,24 @@ router.post('/login', async (req, res) => {
 
 
 
-
-
-// transaction for maker role
+// transaction for maker / approver role
 router.get('/transactions/:role', verifyToken, async (req, res) => {
+    const role = req.params.role;
     try {   
         const [overviewRows] = await db.query('SELECT * FROM TransactionOverview');
         const [listRows] = await db.query('SELECT * FROM TransactionList');
-        console.log("listRows", listRows)
+        let approverList = []
+        if(role === 'Approver') { // Approver can only view Awaiting Approval
+            approverList = listRows.filter(item => item["ApprovalStatus"] === 'Awaiting Approval');
+        }
+
         res.status(200).json({
             overview: overviewRows[0],
-            list: listRows
+            list: role === 'Approver' ? approverList : listRows
         });
     }
     catch (error) {
-        res.status(400).json("error")
+        res.status(400).json("List not found")
     }
 })
 
@@ -170,8 +211,53 @@ router.post('/transactions/operation',verifyToken,  async (req, res) => {
   
     }
     catch (error) {
-        res.status(400).json({message: error.message})
+        res.status(400).json({ message: error.message})
     }
 })
+
+const upload = multer({ dest: 'uploads/' });
+
+router.post('/upload-csv', upload.single('file'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    console.log("request file", req.file)
+    // if(!req.file.to_bank_name) {
+    //     return res.status(400).json({ error: 'Bank name is required' });
+    // }
+    // if(!req.file.to_account_no) {
+    //     return res.status(400).json({ error: 'Account number is required' });
+    // }
+    // if(!req.file.transfer_amount) {
+    //     return res.status(400).json({ error: 'Transfer amount is required' });
+    // }
+
+    console.log("request all file", req.file);
+    //to_bank_name (numeric), to_account_no (numeric), to_account_name, transfer_amount (decimal)
+    const results = [];
+    fs.createReadStream(req.file.path)
+        .pipe(csv())
+        .on('data', (data) => results.push(data))
+        .on('end', () => {
+            console.log("all results", results)
+            // Insert data into the database
+            results.forEach(row => {
+                const query = 'INSERT INTO TransactionList SET ?';
+                db.query(query, row, (err, result) => {
+                    if (err) {
+                        console.error('Error inserting data:', err);
+                        return res.status(500).json({ error: 'Error inserting data' });
+                    }
+                });
+            });
+
+            fs.unlinkSync(req.file.path); // Remove the file from the server
+            res.status(200).json({ message: 'CSV data successfully inserted' });
+        });
+});
+
+
+
 
 module.exports = router;
