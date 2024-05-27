@@ -222,7 +222,6 @@ router.post('/upload-csv', upload.single('file'), (req, res) => {
         return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    //to_bank_name (numeric), to_account_no (numeric), to_account_name, transfer_amount (decimal)
     const results = [];
     fs.createReadStream(req.file.path)
         .pipe(csv())
