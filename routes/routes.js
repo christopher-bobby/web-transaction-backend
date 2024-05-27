@@ -184,7 +184,7 @@ router.get('/transactions/detail/:referenceNo', verifyToken, async (req, res) =>
 });
 
 // POST Approval role
-router.post('/transactions/operation',verifyToken,  async (req, res) => {
+router.post('/transactions/operation', verifyToken,  async (req, res) => {
     const data = {
         role: req.body.role,
         referenceNo: req.body.referenceNo,
@@ -222,41 +222,25 @@ router.post('/upload-csv', upload.single('file'), (req, res) => {
         return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    console.log("request file", req.file)
-    // if(!req.file.to_bank_name) {
-    //     return res.status(400).json({ error: 'Bank name is required' });
-    // }
-    // if(!req.file.to_account_no) {
-    //     return res.status(400).json({ error: 'Account number is required' });
-    // }
-    // if(!req.file.transfer_amount) {
-    //     return res.status(400).json({ error: 'Transfer amount is required' });
-    // }
-
-    console.log("request all file", req.file);
     //to_bank_name (numeric), to_account_no (numeric), to_account_name, transfer_amount (decimal)
     const results = [];
     fs.createReadStream(req.file.path)
         .pipe(csv())
         .on('data', (data) => results.push(data))
         .on('end', () => {
-            console.log("all results", results)
             // Insert data into the database
             results.forEach(row => {
-                const query = 'INSERT INTO TransactionList SET ?';
-                db.query(query, row, (err, result) => {
-                    if (err) {
-                        console.error('Error inserting data:', err);
-                        return res.status(500).json({ error: 'Error inserting data' });
-                    }
-                });
-            });
+                if(row.transfer_amount && row.to_account_no && row.to_account_name && row.to_bank_name) { // all these fields are required
+                    db.query(`INSERT INTO TransactionList (ReferenceNo, TransferAmount, TransferRecord, FromAccountNo, ToAccountNo, ToAccountName, ToAccountBank, Description, Maker, TransferDate, ApprovalStatus ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+                        'ReferenceNo', row.transfer_amount, 'TransferRecord', 'FromAccountNo', row.to_account_no, row.to_account_name, row.to_bank_name, 'Description', 'Maker', '2024-05-24 14:30:00', 'Awaiting Approval'
+                    ])
+                }
 
             fs.unlinkSync(req.file.path); // Remove the file from the server
             res.status(200).json({ message: 'CSV data successfully inserted' });
         });
+    });
 });
-
 
 
 
