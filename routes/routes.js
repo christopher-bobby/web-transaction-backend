@@ -71,7 +71,7 @@ router.post('/register', async (req, res) => {
     //Corporate Bank Account Number is unique validation
     const existingBankAccount = await db.query('SELECT * FROM USER WHERE CorporateAccount = ?', [data.CorporateAccount]);
     if(existingBankAccount?.length) {
-        res.status(400).json("Bank account number is already registered")
+        res.status(400).json({message: "Bank account number is already registered"})
     }
 
 
@@ -89,7 +89,7 @@ router.post('/register', async (req, res) => {
         });
     }
     catch (error) {
-        res.status(400).json({message: error.message})
+        res.status(400).json({message: 'There is an error on the operation'})
     }
 })
 
@@ -140,7 +140,7 @@ router.post('/login', async (req, res) => {
         });
     }
     catch (error) {
-        res.status(400).json("error")
+        res.status(400).json({ message: 'There is an error on the operation'})
     }
 })
 
@@ -163,7 +163,7 @@ router.get('/transactions/:role', verifyToken, async (req, res) => {
         });
     }
     catch (error) {
-        res.status(400).json("List not found")
+        res.status(400).json({error: 'There is an error on the operation'})
     }
 })
 
@@ -179,7 +179,7 @@ router.get('/transactions/detail/:referenceNo', verifyToken, async (req, res) =>
         res.status(200).json(rows[0][0]);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: 'Server error' });
+        res.status(400).json({ error: 'There is an error on the operation' });
     }
 });
 
@@ -211,7 +211,7 @@ router.post('/transactions/operation', verifyToken,  async (req, res) => {
   
     }
     catch (error) {
-        res.status(400).json({ message: error.message})
+        res.status(400).json({ message: 'There is an error on the operation'})
     }
 })
 
