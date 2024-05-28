@@ -26,8 +26,8 @@ It will take a port (normally 3000) to run the server
 - etc
 
 ### Things to consider
-- this web isn't built using best practices / approaches as I was struggling to find the right configuration and wasted several hours on it. Beside I don't have any experience building backend app.
+- this web isn't built using best practices / approaches as I was struggling to find the right configuration (was using MySQL workbench on MacOs Sonoma, but everything just crashed) and wasted several hours on it. Beside I don't have any experience building backend app.
 
 ### Please consider this
-- 90% of the code was built only on the weekend, alongside with the backend code, as I had no holiday and main job was trimming me down.
+- 90% of the code was built only on the weekend, alongside with the frontend code, as I had no holiday and main job was trimming me down.
 - This is my 100%, given the current condition and situation.
